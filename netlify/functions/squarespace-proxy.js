@@ -1,15 +1,15 @@
 // netlify/functions/squarespace-proxy.js
-
 import fetch from "node-fetch";
 
 export async function handler(event) {
-  const { queryStringParameters } = event;
+  const { queryStringParameters = {} } = event;
+  const { format, imageUrl } = queryStringParameters;
 
   try {
-    // 1. JSON REQUEST
-    if (queryStringParameters.format === "json") {
+    // ✅ Force JSON to take priority
+    if (format && format.toLowerCase() === "json") {
       const sqsUrl =
-        "https://worldstoneonline.squarespace.com/?format=json-pretty"; // change if needed
+        "https://worldstoneonline.squarespace.com/?format=json-pretty"; // Change if needed
 
       const response = await fetch(sqsUrl);
       if (!response.ok) {
@@ -28,10 +28,8 @@ export async function handler(event) {
       };
     }
 
-    // 2. IMAGE REQUEST
-    if (queryStringParameters.imageUrl) {
-      const imageUrl = queryStringParameters.imageUrl;
-
+    // ✅ Only run image branch if NO JSON requested
+    if (imageUrl) {
       const response = await fetch(imageUrl, {
         headers: { "User-Agent": "Netlify Proxy" },
       });
@@ -58,7 +56,7 @@ export async function handler(event) {
       };
     }
 
-    // 3. Fallback
+    // Fallback
     return {
       statusCode: 400,
       body: "Missing query params. Use ?format=json or ?imageUrl=...",
