@@ -1,47 +1,49 @@
-const fetch = require("node-fetch");
+import fetch from "node-fetch";
 
-exports.handler = async function (event, context) {
-  const { imageUrl, mode } = event.queryStringParameters || {};
-
+export async function handler(event, context) {
   try {
-    if (mode === "json") {
-      // Squarespace product feed
-      const url = "https://worldstoneonline.com/?format=json";
-      const res = await fetch(url);
-      const data = await res.json();
+    const { imageUrl, mode } = event.queryStringParameters || {};
 
-      return {
-        statusCode: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-        body: JSON.stringify(data),
-      };
-    }
-
+    // 1) IMAGE MODE
     if (imageUrl) {
-      // Proxy an image
-      const res = await fetch(imageUrl);
-      const buffer = await res.arrayBuffer();
+      const r = await fetch(imageUrl);
+      const contentType = r.headers.get("content-type") || "image/png";
+      const buffer = await r.arrayBuffer();
 
       return {
         statusCode: 200,
-        headers: {
-          "Content-Type": res.headers.get("content-type") || "image/png",
-          "Access-Control-Allow-Origin": "*",
-        },
+        headers: { "Content-Type": contentType },
         body: Buffer.from(buffer).toString("base64"),
         isBase64Encoded: true,
       };
     }
 
+    // 2) JSON MODE (fetch Squarespace products)
+    if (mode === "json") {
+      const res = await fetch("https://www.worldstoneonline.com/products?format=json");
+      const data = await res.json();
+
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      };
+    }
+
+    // 3) DEFAULT
     return {
-      statusCode: 400,
-      body: "Missing parameters: provide ?mode=json or ?imageUrl=",
+      statusCode: 200,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: "✅ Proxy function is running!",
+        params: event.queryStringParameters,
+        timestamp: new Date().toISOString(),
+      }),
     };
   } catch (err) {
-    console.error("Proxy error:", err);
-    return { statusCode: 500, body: "Internal proxy error" };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: err.message }),
+    };
   }
-};
+}
