@@ -1,46 +1,47 @@
-const fetch = require("node-fetch");
-
-exports.handler = async function (event) {
+export async function handler(event, context) {
   try {
-    const { queryStringParameters } = event;
-
-    // 🔹 Mode 1: Proxy an image request
-    if (queryStringParameters.imageUrl) {
-      const imageUrl = queryStringParameters.imageUrl;
-
-      const response = await fetch(imageUrl);
-      if (!response.ok) {
-        return { statusCode: response.status, body: "Image fetch failed" };
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const contentType = response.headers.get("content-type") || "image/jpeg";
-
+    const imageUrl = event.queryStringParameters.imageUrl;
+    if (!imageUrl) {
       return {
-        statusCode: 200,
-        headers: {
-          "Content-Type": contentType,
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "public, max-age=86400"
-        },
-        body: Buffer.from(arrayBuffer).toString("base64"),
-        isBase64Encoded: true
+        statusCode: 400,
+        body: "Missing imageUrl parameter",
       };
     }
 
-    // 🔹 Mode 2: Squarespace JSON feed
-    const feedUrl = "https://www.worldstoneonline.com/store?format=json-pretty";
-    const res = await fetch(feedUrl);
-    const data = await res.json();
+    // Fetch the image from Squarespace (or wherever)
+    const response = await fetch(imageUrl, {
+      headers: {
+        "User-Agent": "Netlify Proxy",
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        statusCode: response.status,
+        body: `Failed to fetch image: ${response.statusText}`,
+      };
+    }
+
+    // Get content type from origin (important for images)
+    const contentType = response.headers.get("content-type") || "application/octet-stream";
+
+    // Convert response into ArrayBuffer for binary passthrough
+    const buffer = await response.arrayBuffer();
 
     return {
       statusCode: 200,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify(data)
+      headers: {
+        "Content-Type": contentType,
+        "Access-Control-Allow-Origin": "*",  // Allow all origins
+        "Cache-Control": "public, max-age=3600",
+      },
+      body: Buffer.from(buffer).toString("base64"),
+      isBase64Encoded: true, // 🔑 Tells Netlify this is binary
     };
-
   } catch (err) {
-    console.error(err);
-    return { statusCode: 500, body: "Server error" };
+    return {
+      statusCode: 500,
+      body: `Proxy error: ${err.message}`,
+    };
   }
-};
+}
