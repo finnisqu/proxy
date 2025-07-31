@@ -2,14 +2,16 @@
 import fetch from "node-fetch";
 
 export async function handler(event) {
-  const { queryStringParameters = {} } = event;
-  const { format, imageUrl } = queryStringParameters;
-
   try {
-    // ✅ Force JSON to take priority
-    if (format && format.toLowerCase() === "json") {
-      const sqsUrl =
-        "https://worldstoneonline.squarespace.com/?format=json-pretty"; // Change if needed
+    const params = event.queryStringParameters || {};
+    const format = params.format ? params.format.toLowerCase() : null;
+    const imageUrl = params.imageUrl;
+
+    console.log("DEBUG params:", params);
+
+    // ✅ Force JSON branch first
+    if (format === "json") {
+      const sqsUrl = "https://worldstoneonline.squarespace.com/?format=json-pretty";
 
       const response = await fetch(sqsUrl);
       if (!response.ok) {
@@ -20,7 +22,6 @@ export async function handler(event) {
       }
 
       const data = await response.json();
-
       return {
         statusCode: 200,
         headers: { "Content-Type": "application/json" },
@@ -28,7 +29,7 @@ export async function handler(event) {
       };
     }
 
-    // ✅ Only run image branch if NO JSON requested
+    // ✅ Only run if JSON not requested
     if (imageUrl) {
       const response = await fetch(imageUrl, {
         headers: { "User-Agent": "Netlify Proxy" },
