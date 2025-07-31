@@ -1,5 +1,4 @@
 // netlify/functions/squarespace-proxy.js
-
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return {
@@ -14,7 +13,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    // Use Squarespace public JSON feed instead of /api/commerce
+    // Fetch Squarespace product JSON feed
     const response = await fetch("https://www.worldstoneonline.com/products-1?format=json");
 
     if (!response.ok) {
@@ -23,13 +22,17 @@ exports.handler = async (event) => {
 
     const data = await response.json();
 
-    // Extract just products (simplify payload)
-    const products = data.items.map(item => ({
+    // Confirm whether products are in data.items
+    const items = data.items || [];
+
+    // Map out simplified product structure
+    const products = items.map(item => ({
       id: item.id,
       title: item.title,
-      url: item.fullUrl,
+      url: `https://www.worldstoneonline.com${item.fullUrl}`,
       image: item.assetUrl,
-      categories: item.categories,
+      categories: item.categories || [],
+      tags: item.tags || []
     }));
 
     return {
@@ -39,7 +42,7 @@ exports.handler = async (event) => {
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
       },
-      body: JSON.stringify(products),
+      body: JSON.stringify(products, null, 2),
     };
   } catch (error) {
     return {
