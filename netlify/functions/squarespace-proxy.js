@@ -1,53 +1,67 @@
-export async function handler(event, context) {
+// netlify/functions/squarespace-proxy.js
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+
+exports.handler = async (event, context) => {
   try {
     const { imageUrl, mode } = event.queryStringParameters || {};
 
-    // 1) IMAGE MODE
-    if (imageUrl) {
-      const r = await fetch(imageUrl);
-      const contentType = r.headers.get("content-type") || "image/png";
-      const buffer = await r.arrayBuffer();
-
-      return {
-        statusCode: 200,
-        headers: { "Content-Type": contentType },
-        body: Buffer.from(buffer).toString("base64"),
-        isBase64Encoded: true,
-      };
-    }
-
-    // 2) JSON MODE (Squarespace products)
-    if (mode === "json") {
-      const res = await fetch("https://www.worldstoneonline.com/products?format=json");
-      if (!res.ok) {
-        throw new Error(`Squarespace fetch failed: ${res.status}`);
-      }
-      const data = await res.json();
-
+    // ✅ Step 1: Debug to prove function runs
+    if (!imageUrl && !mode) {
       return {
         statusCode: 200,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          message: "✅ Proxy function is running!",
+          params: event.queryStringParameters,
+          timestamp: new Date().toISOString()
+        })
       };
     }
 
-    // 3) DEFAULT TEST
+    // ✅ Step 2: JSON passthrough (fetch Squarespace data)
+    if (mode === "json") {
+      const response = await fetch("https://www.worldstoneonline.com/?format=json");
+      const data = await response.json();
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      };
+    }
+
+    // ✅ Step 3: Image passthrough
+    if (imageUrl) {
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.statusText}`);
+      }
+
+      const buffer = await response.arrayBuffer();
+      const contentType = response.headers.get("content-type") || "image/png";
+
+      return {
+        statusCode: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Cache-Control": "public, max-age=86400" // 24h cache
+        },
+        body: Buffer.from(buffer).toString("base64"),
+        isBase64Encoded: true
+      };
+    }
+
+    // Default response if nothing matched
     return {
-      statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: "✅ Proxy function is running!",
-        params: event.queryStringParameters,
-        timestamp: new Date().toISOString(),
-      }),
+      statusCode: 400,
+      body: JSON.stringify({ error: "Missing required parameters" })
     };
+
   } catch (err) {
+    console.error("❌ Proxy Error:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error: err.message,
-        stack: err.stack,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ error: err.message, stack: err.stack })
     };
   }
-}
+};
