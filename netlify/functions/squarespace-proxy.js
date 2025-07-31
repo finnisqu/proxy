@@ -1,69 +1,50 @@
 // netlify/functions/squarespace-proxy.js
-import fetch from "node-fetch";
+exports.handler = async function(event, context) {
+  console.log("DEBUG params:", event.queryStringParameters);
 
-export async function handler(event) {
+  const { imageUrl, format } = event.queryStringParameters || {};
+
   try {
-    const params = event.queryStringParameters || {};
-    const format = params.format ? params.format.toLowerCase() : null;
-    const imageUrl = params.imageUrl;
-
-    console.log("DEBUG params:", params);
-
-    // ✅ Force JSON branch first
-    if (format === "json") {
-      const sqsUrl = "https://worldstoneonline.squarespace.com/?format=json-pretty";
-
-      const response = await fetch(sqsUrl);
-      if (!response.ok) {
-        return {
-          statusCode: response.status,
-          body: `Squarespace JSON request failed: ${response.statusText}`,
-        };
-      }
-
-      const data = await response.json();
-      return {
-        statusCode: 200,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      };
-    }
-
-    // ✅ Only run if JSON not requested
+    // If we're proxying an image
     if (imageUrl) {
-      const response = await fetch(imageUrl, {
-        headers: { "User-Agent": "Netlify Proxy" },
-      });
-
+      const response = await fetch(imageUrl);
       if (!response.ok) {
-        return {
-          statusCode: response.status,
-          body: `Image request failed: ${response.statusText}`,
-        };
+        return { statusCode: response.status, body: "Failed to fetch image" };
       }
 
       const contentType = response.headers.get("content-type") || "image/png";
       const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
 
       return {
         statusCode: 200,
-        headers: {
-          "Content-Type": contentType,
-          "Cache-Control": "public, max-age=3600",
-        },
-        body: buffer.toString("base64"),
-        isBase64Encoded: true,
+        headers: { "Content-Type": contentType },
+        body: Buffer.from(arrayBuffer).toString("base64"),
+        isBase64Encoded: true
       };
     }
 
-    // Fallback
+    // If we're fetching Squarespace JSON
+    if (format === "json") {
+      const response = await fetch("https://www.worldstoneonline.com/?format=json");
+      if (!response.ok) {
+        return { statusCode: response.status, body: "Failed to fetch JSON" };
+      }
+      const data = await response.json();
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      };
+    }
+
+    // Default response if no params
     return {
       statusCode: 400,
-      body: "Missing query params. Use ?format=json or ?imageUrl=...",
+      body: "Missing parameters. Use ?imageUrl=... or ?format=json"
     };
+
   } catch (err) {
     console.error("Proxy error:", err);
-    return { statusCode: 500, body: "Proxy error: " + err.message };
+    return { statusCode: 500, body: "Internal server error" };
   }
-}
+};
