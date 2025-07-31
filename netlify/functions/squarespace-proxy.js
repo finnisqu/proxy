@@ -1,50 +1,51 @@
-// netlify/functions/squarespace-proxy.js
-exports.handler = async function(event, context) {
-  console.log("DEBUG params:", event.queryStringParameters);
+const fetch = require("node-fetch");
 
-  const { imageUrl, format } = event.queryStringParameters || {};
-
+exports.handler = async function (event, context) {
   try {
-    // If we're proxying an image
-    if (imageUrl) {
-      const response = await fetch(imageUrl);
-      if (!response.ok) {
-        return { statusCode: response.status, body: "Failed to fetch image" };
-      }
+    const params = event.queryStringParameters || {};
+    const imageUrl = params.imageUrl;
+    const format = params.format;
 
-      const contentType = response.headers.get("content-type") || "image/png";
-      const arrayBuffer = await response.arrayBuffer();
-
-      return {
-        statusCode: 200,
-        headers: { "Content-Type": contentType },
-        body: Buffer.from(arrayBuffer).toString("base64"),
-        isBase64Encoded: true
-      };
-    }
-
-    // If we're fetching Squarespace JSON
+    // If JSON requested
     if (format === "json") {
-      const response = await fetch("https://www.worldstoneonline.com/?format=json");
-      if (!response.ok) {
-        return { statusCode: response.status, body: "Failed to fetch JSON" };
-      }
-      const data = await response.json();
+      const res = await fetch("https://worldstoneonline.squarespace.com/products?format=json");
+      const data = await res.json();
       return {
         statusCode: 200,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+        body: JSON.stringify(data),
       };
     }
 
-    // Default response if no params
+    // If an image URL was provided
+    if (imageUrl) {
+      const res = await fetch(imageUrl);
+      const arrayBuffer = await res.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      return {
+        statusCode: 200,
+        headers: {
+          "Content-Type": res.headers.get("content-type") || "image/png",
+          "Access-Control-Allow-Origin": "*",
+        },
+        body: buffer.toString("base64"),
+        isBase64Encoded: true,
+      };
+    }
+
+    // Default if neither parameter is passed
     return {
       statusCode: 400,
-      body: "Missing parameters. Use ?imageUrl=... or ?format=json"
+      body: "Missing parameters: use ?format=json or ?imageUrl=<url>",
     };
-
   } catch (err) {
-    console.error("Proxy error:", err);
-    return { statusCode: 500, body: "Internal server error" };
+    return {
+      statusCode: 500,
+      body: "Proxy error: " + err.message,
+    };
   }
 };
