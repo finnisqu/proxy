@@ -1,6 +1,7 @@
 // netlify/functions/squarespace-proxy.js
+
 exports.handler = async (event) => {
-  // Handle preflight (OPTIONS) requests
+  // Handle preflight requests (CORS)
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
@@ -14,19 +15,19 @@ exports.handler = async (event) => {
   }
 
   try {
-    // ... rest of the code ...
-
-
-exports.handler = async (event) => {
-  try {
-    // Call Squarespace API (replace URL if needed)
+    // Use the built-in fetch in Netlify runtime (don’t import node-fetch)
     const response = await fetch("https://worldstoneonline.squarespace.com/api/commerce/products");
+
+    if (!response.ok) {
+      throw new Error(`Squarespace API returned ${response.status}`);
+    }
+
     const data = await response.json();
 
     return {
       statusCode: 200,
       headers: {
-        "Access-Control-Allow-Origin": "*",   // allow all domains
+        "Access-Control-Allow-Origin": "*",   // allow your Squarespace site
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
       },
