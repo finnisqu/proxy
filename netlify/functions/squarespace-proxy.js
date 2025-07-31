@@ -1,25 +1,46 @@
-// netlify/functions/squarespace-proxy.js
-export async function handler(event, context) {
-  try {
-    // Always get full product feed, not category‑filtered
-    const feedUrl = `https://www.worldstoneonline.com/products-1?format=json`;
+const fetch = require("node-fetch");
 
-    const response = await fetch(feedUrl);
-    const data = await response.json();
+exports.handler = async function (event) {
+  try {
+    const { queryStringParameters } = event;
+
+    // 🔹 Mode 1: Proxy an image request
+    if (queryStringParameters.imageUrl) {
+      const imageUrl = queryStringParameters.imageUrl;
+
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        return { statusCode: response.status, body: "Image fetch failed" };
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const contentType = response.headers.get("content-type") || "image/jpeg";
+
+      return {
+        statusCode: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "public, max-age=86400"
+        },
+        body: Buffer.from(arrayBuffer).toString("base64"),
+        isBase64Encoded: true
+      };
+    }
+
+    // 🔹 Mode 2: Squarespace JSON feed
+    const feedUrl = "https://www.worldstoneonline.com/store?format=json-pretty";
+    const res = await fetch(feedUrl);
+    const data = await res.json();
 
     return {
       statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      },
+      headers: { "Access-Control-Allow-Origin": "*" },
       body: JSON.stringify(data)
     };
 
   } catch (err) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Proxy failed", details: err.message })
-    };
+    console.error(err);
+    return { statusCode: 500, body: "Server error" };
   }
-}
+};
