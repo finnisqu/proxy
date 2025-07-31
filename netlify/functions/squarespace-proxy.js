@@ -1,15 +1,12 @@
 // netlify/functions/squarespace-proxy.js
 export async function handler(event, context) {
   try {
-    const category = event.queryStringParameters.category || "Granite";
-
-    // Squarespace JSON feed URL
-    const feedUrl = `https://www.worldstoneonline.com/products-1?category=${encodeURIComponent(category)}&format=json`;
+    // Always get full product feed, not category‑filtered
+    const feedUrl = `https://www.worldstoneonline.com/products-1?format=json`;
 
     const response = await fetch(feedUrl);
     const data = await response.json();
 
-    // Return JSON with proper CORS headers
     return {
       statusCode: 200,
       headers: {
