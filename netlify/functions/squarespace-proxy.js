@@ -1,7 +1,6 @@
 // netlify/functions/squarespace-proxy.js
 
 exports.handler = async (event) => {
-  // Handle preflight requests (CORS)
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
@@ -15,23 +14,32 @@ exports.handler = async (event) => {
   }
 
   try {
-    // Use the built-in fetch in Netlify runtime (don’t import node-fetch)
-    const response = await fetch("https://worldstoneonline.squarespace.com/api/commerce/products");
+    // Use Squarespace public JSON feed instead of /api/commerce
+    const response = await fetch("https://www.worldstoneonline.com/shop?format=json");
 
     if (!response.ok) {
-      throw new Error(`Squarespace API returned ${response.status}`);
+      throw new Error(`Squarespace feed returned ${response.status}`);
     }
 
     const data = await response.json();
 
+    // Extract just products (simplify payload)
+    const products = data.items.map(item => ({
+      id: item.id,
+      title: item.title,
+      url: item.fullUrl,
+      image: item.assetUrl,
+      categories: item.categories,
+    }));
+
     return {
       statusCode: 200,
       headers: {
-        "Access-Control-Allow-Origin": "*",   // allow your Squarespace site
+        "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify(products),
     };
   } catch (error) {
     return {
