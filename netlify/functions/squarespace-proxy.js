@@ -1,5 +1,4 @@
 // netlify/functions/squarespace-proxy.js
-import fetch from "node-fetch";
 
 export async function handler(event, context) {
   try {
@@ -7,7 +6,7 @@ export async function handler(event, context) {
 
     // ✅ 1. If "mode=json" → fetch Squarespace JSON feed
     if (mode === "json") {
-      const sqsUrl = "https://www.worldstoneonline.com/?format=json"; // replace with your Squarespace site JSON feed
+      const sqsUrl = "https://www.worldstoneonline.com/?format=json"; // replace with your site
       const res = await fetch(sqsUrl);
       const data = await res.json();
 
