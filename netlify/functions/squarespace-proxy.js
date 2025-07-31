@@ -6,8 +6,18 @@ export async function handler(event, context) {
 
     // ✅ 1. If "mode=json" → fetch Squarespace JSON feed
     if (mode === "json") {
-      const sqsUrl = "https://www.worldstoneonline.com/?format=json"; // replace with your site
-      const res = await fetch(sqsUrl);
+      const sqsUrl = "https://www.worldstoneonline.com/?format=json"; // replace if needed
+      const res = await fetch(sqsUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; Netlify/1.0; +https://www.netlify.com)",
+          "Accept": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Squarespace responded with ${res.status}`);
+      }
+
       const data = await res.json();
 
       return {
