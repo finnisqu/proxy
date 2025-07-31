@@ -1,61 +1,56 @@
-// netlify/functions/squarespace-proxy.js
+import fetch from "node-fetch";
+import * as cheerio from "cheerio";
 
 export async function handler(event, context) {
   try {
-    const { mode, imageUrl } = event.queryStringParameters || {};
+    // ✅ Allow category to be passed as a query parameter
+    // Example: /api/squarespace-proxy?url=https://yoursite.squarespace.com/gallery&category=Granite
+    const queryParams = event.queryStringParameters;
+    const targetUrl = queryParams.url;
+    const category = queryParams.category || "Uncategorized";
 
-    // ✅ 1. If "mode=json" → fetch Squarespace JSON feed
-    if (mode === "json") {
-      const sqsUrl = "https://www.worldstoneonline.com/?format=json"; // replace if needed
-      const res = await fetch(sqsUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; Netlify/1.0; +https://www.netlify.com)",
-          "Accept": "application/json",
-        },
-      });
+    if (!targetUrl) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Missing 'url' query parameter" })
+      };
+    }
 
-      if (!res.ok) {
-        throw new Error(`Squarespace responded with ${res.status}`);
+    // ✅ Fetch Squarespace gallery HTML
+    const res = await fetch(targetUrl);
+    const html = await res.text();
+
+    // ✅ Parse with Cheerio
+    const $ = cheerio.load(html);
+    const products = [];
+
+    $(".sqs-gallery .slide img").each((_, el) => {
+      const name = $(el).attr("alt")?.replace(".jpg", "").trim();
+      const image = $(el).attr("data-src");
+
+      if (name && image) {
+        products.push({
+          name,
+          image,
+          category
+        });
       }
+    });
 
-      const data = await res.json();
-
-      return {
-        statusCode: 200,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      };
-    }
-
-    // ✅ 2. If "imageUrl" → proxy the image
-    if (imageUrl) {
-      const res = await fetch(imageUrl);
-      const buffer = await res.arrayBuffer();
-
-      return {
-        statusCode: 200,
-        headers: { "Content-Type": res.headers.get("content-type") || "image/png" },
-        body: Buffer.from(buffer).toString("base64"),
-        isBase64Encoded: true,
-      };
-    }
-
-    // ✅ 3. Default response (heartbeat)
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: "✅ Proxy function is running!",
-        params: event.queryStringParameters,
-        timestamp: new Date().toISOString(),
-      }),
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*" // allow frontend to fetch
+      },
+      body: JSON.stringify({ products })
     };
 
   } catch (err) {
     console.error("Proxy error:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: err.message }),
+      body: JSON.stringify({ error: err.toString() })
     };
   }
 }
