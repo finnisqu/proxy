@@ -1,67 +1,52 @@
 // netlify/functions/squarespace-proxy.js
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+import fetch from "node-fetch";
 
-exports.handler = async (event, context) => {
+export async function handler(event, context) {
   try {
-    const { imageUrl, mode } = event.queryStringParameters || {};
+    const { mode, imageUrl } = event.queryStringParameters || {};
 
-    // ✅ Step 1: Debug to prove function runs
-    if (!imageUrl && !mode) {
-      return {
-        statusCode: 200,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: "✅ Proxy function is running!",
-          params: event.queryStringParameters,
-          timestamp: new Date().toISOString()
-        })
-      };
-    }
-
-    // ✅ Step 2: JSON passthrough (fetch Squarespace data)
+    // ✅ 1. If "mode=json" → fetch Squarespace JSON feed
     if (mode === "json") {
-      const response = await fetch("https://www.worldstoneonline.com/?format=json");
-      const data = await response.json();
+      const sqsUrl = "https://www.worldstoneonline.com/?format=json"; // replace with your Squarespace site JSON feed
+      const res = await fetch(sqsUrl);
+      const data = await res.json();
+
       return {
         statusCode: 200,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
       };
     }
 
-    // ✅ Step 3: Image passthrough
+    // ✅ 2. If "imageUrl" → proxy the image
     if (imageUrl) {
-      const response = await fetch(imageUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch image: ${response.statusText}`);
-      }
-
-      const buffer = await response.arrayBuffer();
-      const contentType = response.headers.get("content-type") || "image/png";
+      const res = await fetch(imageUrl);
+      const buffer = await res.arrayBuffer();
 
       return {
         statusCode: 200,
-        headers: {
-          "Content-Type": contentType,
-          "Cache-Control": "public, max-age=86400" // 24h cache
-        },
+        headers: { "Content-Type": res.headers.get("content-type") || "image/png" },
         body: Buffer.from(buffer).toString("base64"),
-        isBase64Encoded: true
+        isBase64Encoded: true,
       };
     }
 
-    // Default response if nothing matched
+    // ✅ 3. Default response (heartbeat)
     return {
-      statusCode: 400,
-      body: JSON.stringify({ error: "Missing required parameters" })
+      statusCode: 200,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: "✅ Proxy function is running!",
+        params: event.queryStringParameters,
+        timestamp: new Date().toISOString(),
+      }),
     };
 
   } catch (err) {
-    console.error("❌ Proxy Error:", err);
+    console.error("Proxy error:", err);
     return {
       statusCode: 500,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: err.message, stack: err.stack })
+      body: JSON.stringify({ error: err.message }),
     };
   }
-};
+}
