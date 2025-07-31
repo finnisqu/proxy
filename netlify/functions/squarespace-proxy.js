@@ -1,5 +1,3 @@
-import fetch from "node-fetch";
-
 export async function handler(event, context) {
   try {
     const { imageUrl, mode } = event.queryStringParameters || {};
@@ -18,9 +16,12 @@ export async function handler(event, context) {
       };
     }
 
-    // 2) JSON MODE (fetch Squarespace products)
+    // 2) JSON MODE (Squarespace products)
     if (mode === "json") {
       const res = await fetch("https://www.worldstoneonline.com/products?format=json");
+      if (!res.ok) {
+        throw new Error(`Squarespace fetch failed: ${res.status}`);
+      }
       const data = await res.json();
 
       return {
@@ -30,7 +31,7 @@ export async function handler(event, context) {
       };
     }
 
-    // 3) DEFAULT
+    // 3) DEFAULT TEST
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
@@ -43,7 +44,10 @@ export async function handler(event, context) {
   } catch (err) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: err.message }),
+      body: JSON.stringify({
+        error: err.message,
+        stack: err.stack,
+      }),
     };
   }
 }
