@@ -15,7 +15,7 @@ exports.handler = async (event) => {
 
   try {
     // Use Squarespace public JSON feed instead of /api/commerce
-    const response = await fetch("https://www.worldstoneonline.com/shop?format=json");
+    const response = await fetch("https://www.worldstoneonline.com/products-1?format=json");
 
     if (!response.ok) {
       throw new Error(`Squarespace feed returned ${response.status}`);
