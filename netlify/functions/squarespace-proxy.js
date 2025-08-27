@@ -3,7 +3,7 @@ export async function handler(event) {
   try {
     // Allow either a full URL on your domain or a relative path
     const { url: rawUrl, path } = event.queryStringParameters || {};
-    const TARGET_HOST = process.env.SQSP_HOST || 'https://YOURDOMAIN.com'; // <- change or set in Netlify env
+    const TARGET_HOST = process.env.SQSP_HOST || 'https://worldstoneonline.com'; // <- change or set in Netlify env
 
     const incoming = rawUrl || path; // support both ?url=/products-1?format=json and ?path=/products-1?format=json
     if (!incoming) {
