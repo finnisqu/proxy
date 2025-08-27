@@ -49,6 +49,10 @@ exports.handler = async (event) => {
       statusCode: 500,
       headers: {
         "Access-Control-Allow-Origin": "*",
+        "Content-Type": "application/json",
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0",
+    "Pragma": "no-cache",
+    "Expires": "0"
       },
       body: JSON.stringify({ error: error.message }),
     };
