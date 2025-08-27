@@ -1,57 +1,56 @@
 // netlify/functions/squarespace-proxy.js
-export async function handler(event) {
-  try {
-    // Allow either a full URL on your domain or a relative path
-    const { url: rawUrl, path } = event.queryStringParameters || {};
-    const TARGET_HOST = process.env.SQSP_HOST || 'https://worldstoneonline.com'; // <- change or set in Netlify env
-
-    const incoming = rawUrl || path; // support both ?url=/products-1?format=json and ?path=/products-1?format=json
-    if (!incoming) {
-      return {
-        statusCode: 400,
-               body: JSON.stringify({ error: "Provide ?url=/... or ?path=/..." }),
-        headers: { 'Content-Type': 'application/json' }
-      };
-    }
-
-    // If it's a full URL, ensure it’s on your domain; otherwise treat as relative
-    let target;
-    try {
-      const u = new URL(incoming, TARGET_HOST);
-      if (!u.href.startsWith(TARGET_HOST)) {
-        return { statusCode: 400, body: JSON.stringify({ error: "Invalid host" }) };
-      }
-      target = u.href;
-    } catch {
-      // Shouldn't happen, but bail if URL can't be built
-      return { statusCode: 400, body: JSON.stringify({ error: "Bad URL" }) };
-    }
-
-    const res = await fetch(target, {
-      headers: {
-        // Some Squarespace endpoints require a UA
-        'User-Agent': 'Mozilla/5.0 (Netlify-Proxy)',
-        'Accept': 'application/json, text/javascript, */*; q=0.01'
-      }
-    });
-
-    const contentType = res.headers.get('content-type') || '';
-    const isJson = contentType.includes('application/json') || target.includes('format=json');
-    const text = await res.text();
-
+exports.handler = async (event) => {
+  if (event.httpMethod === "OPTIONS") {
     return {
-      statusCode: res.status,
+      statusCode: 200,
       headers: {
-        'Content-Type': isJson ? 'application/json' : 'text/plain',
-        'Cache-Control': 'public, max-age=300' // 5 min
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
       },
-      body: text
-    };
-  } catch (err) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: err.message || String(err) }),
-      headers: { 'Content-Type': 'application/json' }
+      body: "OK",
     };
   }
-}
+
+  try {
+    // Fetch Squarespace product JSON feed
+    const response = await fetch("https://www.worldstoneonline.com/products-1?format=json");
+
+    if (!response.ok) {
+      throw new Error(`Squarespace feed returned ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Confirm whether products are in data.items
+    const items = data.items || [];
+
+    // Map out simplified product structure
+    const products = items.map(item => ({
+      id: item.id,
+      title: item.title,
+      url: `https://www.worldstoneonline.com${item.fullUrl}`,
+      image: item.assetUrl,
+      categories: item.categories || [],
+      tags: item.tags || []
+    }));
+
+    return {
+      statusCode: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+      body: JSON.stringify(products, null, 2),
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({ error: error.message }),
+    };
+  }
+};
