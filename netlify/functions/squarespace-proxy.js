@@ -1,63 +1,57 @@
 // netlify/functions/squarespace-proxy.js
-exports.handler = async (event) => {
-  // Handle OPTIONS (preflight)
-  if (event.httpMethod === "OPTIONS") {
-    return {
-      statusCode: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept",
-        "Access-Control-Max-Age": "86400"
-      },
-      body: ""
-    };
-  }
-
+export async function handler(event) {
   try {
-    // Fetch Squarespace product JSON feed
-    const response = await fetch("https://www.worldstoneonline.com/products-1?format=json");
+    // Allow either a full URL on your domain or a relative path
+    const { url: rawUrl, path } = event.queryStringParameters || {};
+    const TARGET_HOST = process.env.SQSP_HOST || 'https://YOURDOMAIN.com'; // <- change or set in Netlify env
 
-    if (!response.ok) {
-      throw new Error(`Squarespace feed returned ${response.status}`);
+    const incoming = rawUrl || path; // support both ?url=/products-1?format=json and ?path=/products-1?format=json
+    if (!incoming) {
+      return {
+        statusCode: 400,
+               body: JSON.stringify({ error: "Provide ?url=/... or ?path=/..." }),
+        headers: { 'Content-Type': 'application/json' }
+      };
     }
 
-    const data = await response.json();
+    // If it's a full URL, ensure it’s on your domain; otherwise treat as relative
+    let target;
+    try {
+      const u = new URL(incoming, TARGET_HOST);
+      if (!u.href.startsWith(TARGET_HOST)) {
+        return { statusCode: 400, body: JSON.stringify({ error: "Invalid host" }) };
+      }
+      target = u.href;
+    } catch {
+      // Shouldn't happen, but bail if URL can't be built
+      return { statusCode: 400, body: JSON.stringify({ error: "Bad URL" }) };
+    }
 
-    // Confirm whether products are in data.items
-    const items = data.items || [];
-
-    // Map out simplified product structure
-    const products = items.map(item => ({
-      id: item.id,
-      title: item.title,
-      url: `https://www.worldstoneonline.com${item.fullUrl}`,
-      image: item.assetUrl,
-      categories: item.categories || [],
-      tags: item.tags || []
-    }));
-
-    return {
-      statusCode: 200,
+    const res = await fetch(target, {
       headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
-      body: JSON.stringify(products, null, 2),
-    };
-  } catch (error) {
+        // Some Squarespace endpoints require a UA
+        'User-Agent': 'Mozilla/5.0 (Netlify-Proxy)',
+        'Accept': 'application/json, text/javascript, */*; q=0.01'
+      }
+    });
+
+    const contentType = res.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json') || target.includes('format=json');
+    const text = await res.text();
+
     return {
-    statusCode: 200,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      // helpful: prevent stale
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0",
-      "Pragma": "no-cache",
-      "Expires": "0"
-    },
-    body: JSON.stringify(products)
-  };
+      statusCode: res.status,
+      headers: {
+        'Content-Type': isJson ? 'application/json' : 'text/plain',
+        'Cache-Control': 'public, max-age=300' // 5 min
+      },
+      body: text
+    };
+  } catch (err) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: err.message || String(err) }),
+      headers: { 'Content-Type': 'application/json' }
+    };
   }
-};
+}
